@@ -1,71 +1,77 @@
+import { useEffect, useMemo, useState } from 'react'
+import Navbar from './components/Navbar'
+import Filters from './components/Filters'
+import ItemCard from './components/ItemCard'
+import NewListingModal from './components/NewListingModal'
+
 function App() {
+  const baseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+  const [items, setItems] = useState([])
+  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState({})
+  const [newOpen, setNewOpen] = useState(false)
+  const [favorites, setFavorites] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const params = useMemo(() => ({
+    q: search || undefined,
+    ...filters,
+    limit: 24,
+  }), [search, filters])
+
+  const fetchFeed = async () => {
+    setLoading(true)
+    const res = await fetch(`${baseUrl}/api/feed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) })
+    const data = await res.json()
+    setItems(data)
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchFeed() }, [])
+  useEffect(() => { const t = setTimeout(fetchFeed, 300); return () => clearTimeout(t) }, [search, filters])
+
+  const createListing = async (payload) => {
+    const res = await fetch(`${baseUrl}/api/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (res.ok) {
+      setNewOpen(false)
+      fetchFeed()
+    }
+  }
+
+  const favorite = async (item) => {
+    const userId = 'demo-user'
+    await fetch(`${baseUrl}/api/items/${item.id || item._id}/favorite`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId }) })
+    setFavorites(prev => Array.from(new Set([...prev, item.id || item._id])))
+  }
+
+  const openItem = (item) => {
+    // For MVP open a simple alert; could be a rich detail sheet
+    alert(`${item.title}\n$${item.price}\n${item.description || ''}`)
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Subtle pattern overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]"></div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <Navbar onNew={() => setNewOpen(true)} favoritesCount={favorites.length} onSearchChange={setSearch} search={search} />
 
-      <div className="relative min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-2xl w-full">
-          {/* Header with Flames icon */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center mb-6">
-              <img
-                src="/flame-icon.svg"
-                alt="Flames"
-                className="w-24 h-24 drop-shadow-[0_0_25px_rgba(59,130,246,0.5)]"
-              />
+      <main className="mx-auto max-w-6xl px-4 py-6 flex gap-6">
+        <Filters filters={filters} setFilters={setFilters} onApply={fetchFeed} />
+
+        <section className="flex-1">
+          {loading ? (
+            <div className="grid place-items-center h-64 text-slate-500">Loading feed…</div>
+          ) : items.length === 0 ? (
+            <div className="grid place-items-center h-64 text-slate-500">No items match your filters yet</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {items.map(item => (
+                <ItemCard key={item.id} item={item} onFavorite={favorite} onOpen={openItem} />
+              ))}
             </div>
+          )}
+        </section>
+      </main>
 
-            <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
-              Flames Blue
-            </h1>
-
-            <p className="text-xl text-blue-200 mb-6">
-              Build applications through conversation
-            </p>
-          </div>
-
-          {/* Instructions */}
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-8 shadow-xl mb-6">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                1
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Describe your idea</h3>
-                <p className="text-blue-200/80 text-sm">Use the chat panel on the left to tell the AI what you want to build</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                2
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Watch it build</h3>
-                <p className="text-blue-200/80 text-sm">Your app will appear in this preview as the AI generates the code</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                3
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Refine and iterate</h3>
-                <p className="text-blue-200/80 text-sm">Continue the conversation to add features and make changes</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-sm text-blue-300/60">
-              No coding required • Just describe what you want
-            </p>
-          </div>
-        </div>
-      </div>
+      <NewListingModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={createListing} />
     </div>
   )
 }
